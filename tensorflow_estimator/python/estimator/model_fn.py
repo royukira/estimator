@@ -45,7 +45,7 @@ AVERAGE_LOSS_METRIC_KEY = 'average_loss'
 @estimator_export('estimator.EstimatorSpec')
 class EstimatorSpec(
     collections.namedtuple('EstimatorSpec', [
-        'mode', 'predictions', 'loss', 'train_op', 'eval_metric_ops',
+        'mode', 'predictions', 'loss', 'losses_dict','train_op', 'eval_metric_ops',
         'export_outputs', 'training_chief_hooks', 'training_hooks', 'scaffold',
         'evaluation_hooks', 'prediction_hooks'
     ])):
@@ -54,10 +54,16 @@ class EstimatorSpec(
   `EstimatorSpec` fully defines the model to be run by an `Estimator`.
   """
 
+  """
+  Modified by Roy
+  Date: 2019.12.25
+  Description: Add losses_dict parameter which is a dict of loss tensors
+  """
   def __new__(cls,
               mode,
               predictions=None,
               loss=None,
+              losses_dict=None,
               train_op=None,
               eval_metric_ops=None,
               export_outputs=None,
@@ -121,6 +127,7 @@ class EstimatorSpec(
         prediction.
       predictions: Predictions `Tensor` or dict of `Tensor`.
       loss: Training loss `Tensor`. Must be either scalar, or with shape `[1]`.
+      losses_dict: A dict of training loss 'Tensor's. e.g. {'localization_loss':loc_loss_tensor, 'classification_loss': cls_loss_tensor]
       train_op: Op for the training step.
       eval_metric_ops: Dict of metric results keyed by name.
         The values of the dict can be one of the following:
@@ -162,6 +169,11 @@ class EstimatorSpec(
     """
     train_op = _validate_estimator_spec_train_op(train_op, mode)
     loss = _validate_estimator_spec_loss(loss, mode)
+    if losses_dict != None:
+      if isinstance(losses_dict, dict):
+        losses_dict = [_validate_estimator_spec_loss(losses_dict[loss_key], mode) for loss_key in losses_dict.keys()]
+      else:
+        raise TypeError("losses should be dict, not {}".format(type(losses)))
     predictions = _validate_estimator_spec_predictions(predictions, mode)
     export_outputs = _validate_estimator_spec_export_outputs(
         export_outputs, predictions, mode)
@@ -177,6 +189,7 @@ class EstimatorSpec(
         mode=mode,
         predictions=predictions,
         loss=loss,
+        losses_dict=losses_dict,
         train_op=train_op,
         eval_metric_ops=eval_metric_ops,
         export_outputs=export_outputs,

@@ -1375,9 +1375,20 @@ class Estimator(object):
     worker_hooks.append(
         training.NanTensorHook(estimator_spec.loss)
     )
+    """ 
+    Modified by Roy 
+    Date: 2019.12.25
+    Description: Add losses_dict Hook
+    """
     if self._config.log_step_count_steps is not None:
-      worker_hooks.append(
+      if estimator_spec.losses_dict != None:
+        worker_hooks.append(
           training.LoggingTensorHook(
+              estimator_spec.losses_dict,
+              every_n_iter=self._config.log_step_count_steps)
+        )
+      worker_hooks.append(
+        training.LoggingTensorHook(
               {
                   'loss': estimator_spec.loss,
                   'step': global_step_tensor
