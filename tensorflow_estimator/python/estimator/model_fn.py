@@ -45,7 +45,7 @@ AVERAGE_LOSS_METRIC_KEY = 'average_loss'
 @estimator_export('estimator.EstimatorSpec')
 class EstimatorSpec(
     collections.namedtuple('EstimatorSpec', [
-        'mode', 'predictions', 'loss', 'losses_dict','train_op', 'eval_metric_ops',
+        'mode', 'predictions', 'loss', 'losses_dict','train_op', 'eval_metric_ops', 'specified_ops',
         'export_outputs', 'training_chief_hooks', 'training_hooks', 'scaffold',
         'evaluation_hooks', 'prediction_hooks'
     ])):
@@ -57,7 +57,9 @@ class EstimatorSpec(
   """
   Modified by Roy
   Date: 2019.12.25
-  Description: Add losses_dict parameter which is a dict of loss tensors
+  Description: 1. Add losses_dict parameter which is a dict of loss tensors
+  2. Add specified_ops parameters which is a dict of specified Ops to be processed 
+      (e.g Using LoggingTensorHook to print some reults of specified Ops for debugging)
   """
   def __new__(cls,
               mode,
@@ -66,6 +68,7 @@ class EstimatorSpec(
               losses_dict=None,
               train_op=None,
               eval_metric_ops=None,
+              specified_ops=None,
               export_outputs=None,
               training_chief_hooks=None,
               training_hooks=None,
@@ -137,6 +140,7 @@ class EstimatorSpec(
         evaluated without any impact on state (typically is a pure computation
         results based on variables.). For example, it should not trigger the
         `update_op` or requires any input fetching.
+      specified_ops: Dict of specified operators keyed by Op name.
       export_outputs: Describes the output signatures to be exported to
         `SavedModel` and used during serving.
         A dict `{name: output}` where:
@@ -169,11 +173,7 @@ class EstimatorSpec(
     """
     train_op = _validate_estimator_spec_train_op(train_op, mode)
     loss = _validate_estimator_spec_loss(loss, mode)
-    if losses_dict != None:
-      if isinstance(losses_dict, dict):
-        losses_dict = [_validate_estimator_spec_loss(losses_dict[loss_key], mode) for loss_key in losses_dict.keys()]
-      else:
-        raise TypeError("losses should be dict, not {}".format(type(losses)))
+    losses_dict = _validate_estimator_spec_losses_dict(losses_dict, mode)
     predictions = _validate_estimator_spec_predictions(predictions, mode)
     export_outputs = _validate_estimator_spec_export_outputs(
         export_outputs, predictions, mode)
@@ -182,6 +182,7 @@ class EstimatorSpec(
     prediction_hooks = _validate_estimator_spec_hooks(prediction_hooks)
     training_chief_hooks = _validate_estimator_spec_hooks(training_chief_hooks)
     eval_metric_ops = _validate_eval_metric_ops(eval_metric_ops)
+    specified_ops = _validate_estimator_spec_specified_op(specified_ops)
     scaffold = _validate_scaffold(scaffold)
 
     return super(EstimatorSpec, cls).__new__(
@@ -192,6 +193,7 @@ class EstimatorSpec(
         losses_dict=losses_dict,
         train_op=train_op,
         eval_metric_ops=eval_metric_ops,
+        specified_ops=specified_ops,
         export_outputs=export_outputs,
         training_chief_hooks=training_chief_hooks,
         training_hooks=training_hooks,
@@ -285,6 +287,34 @@ _default_graph_error_message_template = (
     'in the most recent call to "model_fn".')
 
 
+def _validate_estimator_spec_specified_op(specified_ops):
+  """Validate specified_ops inputs for EstimatorSpec or TPUEstimatorSpec.
+
+  Args:
+    specified_ops: Dict of specified ops.
+
+  Returns:
+    specified_ops: Dict of specified ops.
+
+  Raises:
+    TypeError:  If:
+                - a non-'dict' Type
+                - specified_ops is neither a `Tensor` nor an Op.
+                - specified_ops is not part of the default graph.
+  """
+  if specified_ops != None:
+    if isinstance(specified_ops, dict):
+      default_graph = ops.get_default_graph()
+      for op_key in specified_ops.keys():
+        _check_is_tensor_or_operation(specified_ops[op_key], op_key)
+        if isinstance(specified_ops[op_key], variables.Variable):
+          specified_ops[op_key] = specified_ops[op_key].op
+        if not (context.executing_eagerly() or specified_ops[op_key].graph is default_graph):
+          raise ValueError(_default_graph_error_message_template.format(op_key, specified_ops[op_key].name))
+    else:
+      raise TypeError("The type of specified_ops should be dict, not {}".format(type(specified_ops)))
+  return specified_ops
+
 def _validate_estimator_spec_train_op(train_op, mode):
   """Validate train_op inputs for EstimatorSpec or TPUEstimatorSpec.
 
@@ -353,6 +383,34 @@ def _validate_estimator_spec_loss(loss, mode):
       raise ValueError(
           _default_graph_error_message_template.format('loss', loss.name))
   return loss
+
+
+def _validate_estimator_spec_losses_dict(losses_dict, mode):
+  """Validate losses_dict inputs for EstimatorSpec or TPUEstimatorSpec.
+
+  Args:
+    losses_dict: Dict of Training loss `Tensor`. 
+    mode: A `ModeKeys`. Used to determine whether the losses in losses_dict are acceptable for use
+      in the current mode; for example, None is acceptable if we are not
+      training or evaluating.
+
+  Returns:
+    losses_dict: Dict of Training loss `Tensor`.
+
+  Raises:
+    ValueError: If the losses `Tensor` in losses_dict is not appropriately formatted.
+    TypeError:  If:
+                - a non-'dict' Type
+                - a non-`Tensor`, non-None input is passed.
+                - the loss `Tensor` is not part of the default graph.
+  """
+  if losses_dict != None:
+      if isinstance(losses_dict, dict):
+        losses_dict = [_validate_estimator_spec_loss(losses_dict[loss_key], mode) for loss_key in losses_dict.keys()]
+      else:
+        raise TypeError("The type of losses_dict should be dict, not {}".format(type(losses_dict)))
+  
+  return losses_dict
 
 
 def _validate_estimator_spec_predictions(predictions, mode):

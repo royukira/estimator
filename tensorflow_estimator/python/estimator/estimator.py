@@ -1377,8 +1377,8 @@ class Estimator(object):
     )
     """ 
     Modified by Roy 
-    Date: 2019.12.25
-    Description: Add losses_dict Hook
+    Date: 2019.12.26
+    Description: Add specified_ops hook
     """
     if self._config.log_step_count_steps is not None:
       if estimator_spec.losses_dict != None:
@@ -1387,6 +1387,12 @@ class Estimator(object):
               estimator_spec.losses_dict,
               every_n_iter=self._config.log_step_count_steps)
         )
+      if estimator_spec.specified_ops != None:
+         worker_hooks.append(
+           training.LoggingTensorHook(
+             estimator_spec.specified_ops,
+             every_n_iter=self._config.log_step_count_steps)
+         )
       worker_hooks.append(
         training.LoggingTensorHook(
               {
