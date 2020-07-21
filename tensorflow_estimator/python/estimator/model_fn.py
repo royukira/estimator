@@ -45,7 +45,7 @@ AVERAGE_LOSS_METRIC_KEY = 'average_loss'
 @estimator_export('estimator.EstimatorSpec')
 class EstimatorSpec(
     collections.namedtuple('EstimatorSpec', [
-        'mode', 'predictions', 'loss', 'losses_dict','train_op', 'eval_metric_ops', 'specified_ops',
+        'mode', 'predictions', 'loss', 'losses_dict','train_op', 'eval_metric_ops', 'specified_ops', 'export_inputs',
         'export_outputs', 'training_chief_hooks', 'training_hooks', 'scaffold',
         'evaluation_hooks', 'prediction_hooks'
     ])):
@@ -60,6 +60,11 @@ class EstimatorSpec(
   Description: 1. Add losses_dict parameter which is a dict of loss tensors
   2. Add specified_ops parameters which is a dict of specified Ops to be processed 
       (e.g Using LoggingTensorHook to print some reults of specified Ops for debugging)
+
+  Modified by Roy
+  Data: 2020.07.21
+  Description:
+  1. Add "export_inputs": for input tensor 
   """
   def __new__(cls,
               mode,
@@ -69,6 +74,7 @@ class EstimatorSpec(
               train_op=None,
               eval_metric_ops=None,
               specified_ops=None,
+              export_inputs=None,
               export_outputs=None,
               training_chief_hooks=None,
               training_hooks=None,
@@ -175,6 +181,7 @@ class EstimatorSpec(
     loss = _validate_estimator_spec_loss(loss, mode)
     losses_dict = _validate_estimator_spec_losses_dict(losses_dict, mode)
     predictions = _validate_estimator_spec_predictions(predictions, mode)
+    export_inputs = export_inputs  # TODO: write a validate func for it
     export_outputs = _validate_estimator_spec_export_outputs(
         export_outputs, predictions, mode)
     training_hooks = _validate_estimator_spec_hooks(training_hooks)
@@ -194,6 +201,7 @@ class EstimatorSpec(
         train_op=train_op,
         eval_metric_ops=eval_metric_ops,
         specified_ops=specified_ops,
+        export_inputs=export_inputs,
         export_outputs=export_outputs,
         training_chief_hooks=training_chief_hooks,
         training_hooks=training_hooks,

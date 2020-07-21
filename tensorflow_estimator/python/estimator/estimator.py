@@ -26,6 +26,7 @@ import tempfile
 
 import numpy as np
 import six
+import cv2
 
 from google.protobuf import message
 from tensorflow.core.framework import summary_pb2
@@ -1186,6 +1187,9 @@ class Estimator(object):
       worker_hooks.extend(input_hooks)
       estimator_spec = self._call_model_fn(
           features, labels, ModeKeys.TRAIN, self.config)
+      print("features: {}".format(features))
+      print("estimator_spec: {}".format(estimator_spec))
+      input("Continue...")
       global_step_tensor = training_util.get_global_step(g)
       return self._train_with_estimator_spec(estimator_spec, worker_hooks,
                                              hooks, global_step_tensor,
@@ -1482,7 +1486,11 @@ class Estimator(object):
               training.StepCounterHook(
                   every_n_steps=self._config.log_step_count_steps,
                   output_dir=self._config.model_dir))
-
+    """ 
+    Modified by Roy 
+    Date: 2020.07.21
+    Description: Add input image into session run for retriving the input image.
+    """
     with training.MonitoredTrainingSession(
         master=self._config.master,
         is_chief=self._config.is_chief,
@@ -1498,7 +1506,27 @@ class Estimator(object):
       loss = None
       any_step_done = False
       while not mon_sess.should_stop():
-        _, loss = mon_sess.run([estimator_spec.train_op, estimator_spec.loss])
+        # Added by Roy: For exam whether input is right
+        if estimator_spec.export_inputs is not None:
+          _, input_imgs, loss = mon_sess.run([estimator_spec.train_op, estimator_spec.export_inputs, estimator_spec.loss])
+          # print("type of input_img: {}".format(type(input_img)))
+          # input("Continue...")
+          num_input_imgs = input_imgs.shape[0]
+          for i in range(num_input_imgs):
+            input_img = input_imgs[i]
+            restore_input_img = (input_img + 1.0) * (255.0/2.0)
+            rgb_img = restore_input_img[:,:,:3]
+            feature_img = restore_input_img[:,:,3:]
+            rgb_img = rgb_img.astype(np.uint8)
+            rgb_img = cv2.cvtColor(rgb_img, cv2.COLOR_RGB2BGR)
+            feature_img = feature_img.astype(np.uint8)
+            no_use_pad_np = np.zeros((feature_img.shape[0], feature_img.shape[1], 1), np.uint8)
+            show_feature = np.concatenate((feature_img, no_use_pad_np), axis=2)
+            cv2.imshow("input rgb", rgb_img)
+            cv2.imshow("input feature", show_feature)
+            cv2.waitKey(0)
+        else:
+          _, loss = mon_sess.run([estimator_spec.train_op, estimator_spec.loss])
         any_step_done = True
     if not any_step_done:
       logging.warning('Training with estimator made no steps. '
