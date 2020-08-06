@@ -1187,9 +1187,9 @@ class Estimator(object):
       worker_hooks.extend(input_hooks)
       estimator_spec = self._call_model_fn(
           features, labels, ModeKeys.TRAIN, self.config)
-      print("features: {}".format(features))
-      print("estimator_spec: {}".format(estimator_spec))
-      input("Continue...")
+      # print("features: {}".format(features))
+      # print("estimator_spec: {}".format(estimator_spec))
+      # input("Continue...")
       global_step_tensor = training_util.get_global_step(g)
       return self._train_with_estimator_spec(estimator_spec, worker_hooks,
                                              hooks, global_step_tensor,
